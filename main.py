@@ -22,7 +22,7 @@ class Beatmapset:
         if not self.path:
             self.path = path
             
-        dest = "./working/"+os.path.splitext(os.path.basename(self.path))[0]
+        dest = "./working/"
         with zipfile.ZipFile(self.path, 'r') as zip_ref:
             if not zip_ref:
                 sys.exit(self.path+" is not a valid beatmapset file")
@@ -122,7 +122,7 @@ class Beatmap:
                 file.write("\n")
             file.write("[HitObjects]\n")
             for obj in self.objects:
-                file.write("".join(obj.args)+"\n")
+                file.write(",".join(obj.args)+"\n")
 
     def writeData(self, file, key, data):
         file.write(key + ":" + data + "\n")
@@ -131,14 +131,18 @@ class Beatmap:
         objects = list()
 
         for obj in self.objects:
-            if(int(obj.args[0]) / 512 / 4 < 16 and column == 1):
-                objects.append(obj)
-            if(int(obj.args[0]) / 512 / 4 < 48 and column == 2):
-                objects.append(obj)
-            if(int(obj.args[0]) / 512 / 4 < 80 and column == 3):
-                objects.append(obj)
-            if(int(obj.args[0]) / 512 / 4 < 112 and column == 4):
-                objects.append(obj)
+            if((int(obj.args[0])-64) / 4 < 16):
+                if(column == 1):
+                    objects.append(obj)
+            elif((int(obj.args[0])-64) / 4 < 48):
+                if(column == 2):
+                    objects.append(obj)
+            elif((int(obj.args[0])-64) / 4 < 80):
+                if(column == 3):
+                    objects.append(obj)
+            elif((int(obj.args[0])-64) / 4 < 112):
+                if(column == 4):
+                    objects.append(obj)
 
         return objects
 
@@ -151,6 +155,7 @@ def copy1kBeatmap(beatmap, column):
     b = copy.deepcopy(beatmap)
 
     b.data["[Metadata]"]["Version"] += " 1k" + str(column)
+    b.data["[Difficulty]"]["CircleSize"] = "1"
     b.objects = b.getHitObjectsColumn(column)
     b.writefile()
 
