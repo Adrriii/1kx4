@@ -2,8 +2,10 @@ import zipfile
 import sys
 import os
 import shutil
+import copy
 
 input_dir = "input/"
+working_dir = "working/"
 output_dir = "output/"
 
 class Beatmapset:
@@ -20,7 +22,7 @@ class Beatmapset:
         if not self.path:
             self.path = path
             
-        dest = "./output/"+os.path.splitext(os.path.basename(self.path))[0]
+        dest = "./working/"+os.path.splitext(os.path.basename(self.path))[0]
         with zipfile.ZipFile(self.path, 'r') as zip_ref:
             if not zip_ref:
                 sys.exit(self.path+" is not a valid beatmapset file")
@@ -53,8 +55,9 @@ class Beatmap:
             sys.exit("You need to specify a path to read a beatmap")
 
         mode = None
+        category = None
         self.data = dict()
-        self.copy = list()
+        self.copy = dict()
         self.objects = list()
 
         with open(self.path, 'r') as file:
@@ -63,18 +66,28 @@ class Beatmap:
 
                 if(line == "[General]"):
                     mode = "data"
+                    category = "[General]"
+                    self.data[category] = dict()
                 elif(line == "[Editor]"):
                     mode = "data"
+                    category = "[Editor]"
+                    self.data[category] = dict()
                 elif(line == "[Metadata]"):
                     mode = "data"
+                    category = "[Metadata]"
+                    self.data[category] = dict()
                 elif(line == "[Difficulty]"):
                     mode = "data"
+                    category = "[Difficulty]"
+                    self.data[category] = dict()
                 elif(line == "[Events]"):
                     mode = "copy"
-                    self.copy.append(line)
+                    category = "[Events]"
+                    self.copy[category] = list()
                 elif(line == "[TimingPoints]"):
                     mode = "copy"
-                    self.copy.append(line)
+                    category = "[TimingPoints]"
+                    self.copy[category] = list()
                 elif(line == "[HitObjects]"):
                     mode = "objects"
                 elif(not mode):
@@ -84,27 +97,47 @@ class Beatmap:
                         s = line.split(":")
                         if(len(s)>1):
                             key = s.pop(0)
-                            self.data[key] = ":".join(s)
+                            self.data[category][key] = ":".join(s)
                     elif(mode == "copy"):
-                        self.copy.append(line)
+                        self.copy[category].append(line)
                     elif(mode == "objects"):
                         self.objects.append(HitObject(line))
         self.read = True
 
     def writefile(self):
-        pass
+        filename = self.data["[Metadata]"]["ArtistUnicode"] + " - " + self.data["[Metadata]"]["TitleUnicode"] + " (" + self.data["[Metadata]"]["Creator"] + ") [" + self.data["[Metadata]"]["Version"] + "].osu"
+
+        with open("working/"+filename,"w") as file:
+            file.write("osu file format v14\n")
+            file.write("\n")
+            for categ,datas in self.data.items():
+                file.write(categ+"\n")
+                for key,data in datas.items():
+                    self.writeData(file,key,data)
+                file.write("\n")
+            for categ,lines in self.copy.items():
+                file.write(categ+"\n")
+                for line in lines:
+                    file.write(line+"\n")
+                file.write("\n")
+            file.write("[HitObjects]\n")
+            for obj in self.objects:
+                file.write("".join(obj.args)+"\n")
+
+    def writeData(self, file, key, data):
+        file.write(key + ":" + data + "\n")
 
     def getHitObjectsColumn(self, column):
         objects = list()
 
         for obj in self.objects:
-            if(obj.args[0] / 512 / 4 < 16 and column == 1):
+            if(int(obj.args[0]) / 512 / 4 < 16 and column == 1):
                 objects.append(obj)
-            if(obj.args[0] / 512 / 4 < 48 and column == 2):
+            if(int(obj.args[0]) / 512 / 4 < 48 and column == 2):
                 objects.append(obj)
-            if(obj.args[0] / 512 / 4 < 80 and column == 3):
+            if(int(obj.args[0]) / 512 / 4 < 80 and column == 3):
                 objects.append(obj)
-            if(obj.args[0] / 512 / 4 < 112 and column == 4):
+            if(int(obj.args[0]) / 512 / 4 < 112 and column == 4):
                 objects.append(obj)
 
         return objects
@@ -113,6 +146,18 @@ class HitObject:
 
     def __init__(self,line):
         self.args = line.split(",")
+
+def copy1kBeatmap(beatmap, column):
+    b = copy.deepcopy(beatmap)
+
+    b.data["[Metadata]"]["Version"] += " 1k" + str(column)
+    b.objects = b.getHitObjectsColumn(column)
+    b.writefile()
+
+def packWorkingBeatmap(beatmap):
+    dest = "output/"+beatmap.data["[Metadata]"]["ArtistUnicode"] + " - " + beatmap.data["[Metadata]"]["TitleUnicode"] + " (" + beatmap.data["[Metadata]"]["Creator"] + ").osz"
+    shutil.make_archive(dest, 'zip', "working/")
+    shutil.move(dest+".zip",dest)
 
 if len(sys.argv) < 2:
     sys.exit("You need to specify at least one beatmapset's path")
@@ -124,10 +169,9 @@ for i in range(1,len(sys.argv)):
         sys.exit(sys.argv[i]+" is not a .osz file")
 
 try:
-    shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
 except:
     pass
-os.mkdir(output_dir)
 
 beatmapsets = list()
 
@@ -135,5 +179,25 @@ for i in range(1,len(sys.argv)):
     beatmapsets.append(Beatmapset(sys.argv[i]))
 
 for beatmapset in beatmapsets:
+    try:
+        shutil.rmtree(working_dir)
+    except:
+        pass
+    try:
+        os.mkdir(working_dir)
+    except:
+        pass
     for beatmap in beatmapset.getBeatmaps():
         beatmap.readfile()
+
+        copy1kBeatmap(beatmap, 1)
+        copy1kBeatmap(beatmap, 2)
+        copy1kBeatmap(beatmap, 3)
+        copy1kBeatmap(beatmap, 4)
+
+        packWorkingBeatmap(beatmap)
+    
+try:
+    shutil.rmtree(working_dir)
+except:
+    pass
