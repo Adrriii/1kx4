@@ -3,8 +3,8 @@ import sys
 import os
 import shutil
 
-input_dir = "./input/"
-output_dir = "./output/"
+input_dir = "input/"
+output_dir = "output/"
 
 class Beatmapset:
 
@@ -89,16 +89,30 @@ class Beatmap:
                         self.copy.append(line)
                     elif(mode == "objects"):
                         self.objects.append(HitObject(line))
+        self.read = True
+
+    def writefile(self):
+        pass
+
+    def getHitObjectsColumn(self, column):
+        objects = list()
+
+        for obj in self.objects:
+            if(obj.args[0] / 512 / 4 < 16 and column == 1):
+                objects.append(obj)
+            if(obj.args[0] / 512 / 4 < 48 and column == 2):
+                objects.append(obj)
+            if(obj.args[0] / 512 / 4 < 80 and column == 3):
+                objects.append(obj)
+            if(obj.args[0] / 512 / 4 < 112 and column == 4):
+                objects.append(obj)
+
+        return objects
 
 class HitObject:
 
     def __init__(self,line):
         self.args = line.split(",")
-
-        
-
-          
-
 
 if len(sys.argv) < 2:
     sys.exit("You need to specify at least one beatmapset's path")
@@ -109,7 +123,10 @@ for i in range(1,len(sys.argv)):
     if os.path.splitext(sys.argv[i])[1] != ".osz":
         sys.exit(sys.argv[i]+" is not a .osz file")
 
-shutil.rmtree(output_dir)
+try:
+    shutil.rmtree(output_dir)
+except:
+    pass
 os.mkdir(output_dir)
 
 beatmapsets = list()
